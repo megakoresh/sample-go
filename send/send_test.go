@@ -31,7 +31,7 @@ func TestSend(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		t.Logf("Running %s", c.input)
+		t.Logf("Send test case %s", c.input)
 		tmp, err := os.CreateTemp("", fmt.Sprintf("sample_test_send_%d.json", i))
 		if err != nil {
 			t.Fatalf("Could not create test file for case")
@@ -39,7 +39,7 @@ func TestSend(t *testing.T) {
 		tmp.WriteString(c.input)
 		tmp.Close()
 
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pastebinMockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			err := r.ParseForm()
 			if err != nil {
 				t.Fatalf("Could not parse input of test case %s", err)
@@ -62,12 +62,12 @@ func TestSend(t *testing.T) {
 			}
 		}))
 
-		res := Send([]string{fmt.Sprintf("-file=%s", tmp.Name()), fmt.Sprintf("-pbapikey=%s", c.apikey), fmt.Sprintf("-pburl=%s", server.URL)})
+		res := Send([]string{fmt.Sprintf("-file=%s", tmp.Name()), fmt.Sprintf("-pbapikey=%s", c.apikey), fmt.Sprintf("-pburl=%s", pastebinMockServer.URL), "-destination=pastebin"})
 		err = os.Remove(tmp.Name())
 		if err != nil {
 			t.Fatalf("Could not remove %s - %s", tmp.Name(), err)
 		}
-		server.Close()
+		pastebinMockServer.Close()
 		if res != c.want {
 			t.Fatalf("Test case failed %d != %d", res, c.want)
 		}

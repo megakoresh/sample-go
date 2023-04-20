@@ -19,20 +19,22 @@ const (
 )
 
 type DataItem struct {
-	Format string `json:"-" xml:"-"` // omit
+	Format  string   `json:"-" xml:"-"` // omit
+	XMLName xml.Name `xml:"di"`         // necessary to define xml wrapper of the struct
 
 	Peruna   string `json:"peruna" xml:"peruna"`
 	Porkkana string `json:"porkkana" xml:"porkkana"`
 }
 
 func (di DataItem) String() string {
-	return fmt.Sprintf("%s %s", di.Peruna, di.Porkkana)
+	return fmt.Sprintf("peruna=%s porkkana=%s", di.Peruna, di.Porkkana)
 }
 
 func Parse(format string, file string) (*DataItem, error) {
 	var (
 		input *os.File
 		di    DataItem
+		err   error
 	)
 	switch file {
 	case FileStdin:
@@ -54,20 +56,16 @@ func Parse(format string, file string) (*DataItem, error) {
 	case FmtJSON:
 		di.Format = FmtJSON
 		dec := json.NewDecoder(input)
-		err := dec.Decode(&di)
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
-		return &di, nil
+		err = dec.Decode(&di)
 	case FmtXML:
 		di.Format = FmtXML
 		dec := xml.NewDecoder(input)
-		if err := dec.Decode(&di); err != nil {
-			return nil, err
-		}
-		dec.Decode(&di)
+		err = dec.Decode(&di)
 	default:
 		return nil, fmt.Errorf("unrecognized format: %s", format)
 	}
-	return &DataItem{}, nil
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	return &di, nil
 }

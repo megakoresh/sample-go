@@ -22,7 +22,7 @@ func TestCreateServer(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		t.Logf("Running %s", c.Name)
+		t.Logf("Server test case %s", c.Name)
 		s := createServer(c.m)
 		testS := httptest.NewServer(s)
 		defer testS.Close()

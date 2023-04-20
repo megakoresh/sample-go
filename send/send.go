@@ -2,6 +2,7 @@ package send
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 
 const (
 	destPastebin = "pastebin"
+	destStdout   = "stdout"
 	pastebinUrl  = "https://pastebin.com/api/api_post.php"
 )
 
@@ -34,7 +36,7 @@ func init() {
 	fs = flag.NewFlagSet("send", flag.CommandLine.ErrorHandling())
 	fs.StringVar(&file, "file", input.FileStdin, "File for processing")
 	fs.StringVar(&format, "format", input.FmtJSON, "Input file format")
-	fs.StringVar(&destination, "destination", destPastebin, "Where to send the data")
+	fs.StringVar(&destination, "destination", destStdout, "Where to send the data")
 	fs.StringVar(&pbUrl, "pburl", pastebinUrl, "Pastebin url")
 	fs.StringVar(&pbApiKey, "pbapikey", util.GetString(os.Getenv("PB_API_KEY"), ""), "If destination is pastebin, then api key for it (required)")
 	fs.StringVar(&pbPasteTitle, "pbpastetitle", "swiggity.json", "Title of your pastebin paste if destination is pastebin")
@@ -42,8 +44,24 @@ func init() {
 }
 
 // it's usually best to return to main goroutine for any kind of user output. Don't print output from spawned goroutines
-func doSend(di *input.DataItem, rc chan<- *http.Response, errChan chan<- error) {
+func doSend(di *input.DataItem, rc chan<- []byte, errChan chan<- error) {
+	var (
+		output []byte
+		err    error
+	)
+	switch di.Format {
+	case input.FmtJSON:
+		output, err = json.MarshalIndent(di, "", "  ")
+	case input.FmtXML:
+		output, err = xml.MarshalIndent(di, "", "  ")
+	}
+	if err != nil {
+		errChan <- err
+		return
+	}
 	switch destination {
+	case destStdout:
+		rc <- output
 	case destPastebin:
 		if pbApiKey == "" {
 			errChan <- fmt.Errorf("no pastebin api key supplied, can't send (╯°□°）╯︵ ┻━┻")
@@ -53,14 +71,10 @@ func doSend(di *input.DataItem, rc chan<- *http.Response, errChan chan<- error) 
 			errChan <- fmt.Errorf("no pastebin url supplied, can't send (╯°□°）╯︵ ┻━┻")
 			return
 		}
-		indentedJson, err := json.MarshalIndent(di, "", "  ")
-		if err != nil {
-			errChan <- err
-			return
-		}
+
 		form := url.Values{}
 		form.Add("api_dev_key", pbApiKey)
-		form.Add("api_paste_code", string(indentedJson))
+		form.Add("api_paste_code", string(output))
 		form.Add("api_paste_name", pbPasteTitle)
 		form.Add("api_paste_format", di.Format)
 		form.Add("api_paste_expire", "1W")
@@ -70,7 +84,17 @@ func doSend(di *input.DataItem, rc chan<- *http.Response, errChan chan<- error) 
 			errChan <- err
 			return
 		}
-		rc <- res
+		defer res.Body.Close()
+		b, err := io.ReadAll(res.Body)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		if res.StatusCode >= 400 {
+			errChan <- fmt.Errorf("api server returned error code: %d\n%s", res.StatusCode, b)
+			return
+		}
+		rc <- b
 		return
 	default:
 		errChan <- fmt.Errorf("unsupported destination: %s", destination)
@@ -79,7 +103,7 @@ func doSend(di *input.DataItem, rc chan<- *http.Response, errChan chan<- error) 
 }
 
 func Send(args []string) int {
-	util.Logger.Printf("Sending input to %s API", destination)
+	util.Logger.Printf("Sending input to %s", destination)
 	fs.Parse(args)
 	if help {
 		fs.Usage()
@@ -97,7 +121,7 @@ func Send(args []string) int {
 	}
 
 	var (
-		resChan = make(chan *http.Response)
+		resChan = make(chan []byte)
 		errChan = make(chan error)
 	)
 
@@ -106,18 +130,9 @@ func Send(args []string) int {
 	for {
 		select {
 		case r := <-resChan:
-			defer r.Body.Close()
-			util.Logger.Println("Received response from api server")
-			_, err := io.Copy(os.Stdout, r.Body) // this is used if you have potentially big streaming response that you want to pipe directly to
-			os.Stdout.WriteString("\n")          // terminator to avoid shell pollution
-			if err != nil {
-				util.Logger.Printf("Error while piping api response to stdout: %v", err)
-				return 1
-			}
-			if r.StatusCode >= 400 {
-				util.Logger.Printf("API server returned error code: %d", r.StatusCode)
-				return 1
-			}
+			util.Logger.Println("Received response from destination")
+			os.Stdout.Write(r)
+			os.Stdout.WriteString("\n")
 			return 0
 		case e := <-errChan:
 			util.Logger.Println("Error while sending data to api server")
