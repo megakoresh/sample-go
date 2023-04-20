@@ -1,14 +1,14 @@
 # Go sample project
 
-Sample repo to quickstart golang applications. Plz note that this is designed to demonstrate common used features, not best practices. E.g. the custom flagset usage here is mostly superficial, in a program like this it's better to just use default flagset.
+Sample repo to quickstart golang applications. Plz note that this is designed to demonstrate common used features, not best practices. E.g. the custom flagset usage here is mostly superficial, in a program like this it's better to just use default flagset. Same applies to packages - a program as small as this typically can all be done in main package, no need to split anything.
 
 ## Functionality
 
 Sample functionality includes:
 
-- Reading data from stdin
-- Making some api requests
-- Outputting data to stdout
+- Parsing data from stdin or file
+- Serializing data to json or xml and posting it to pastebin (or stdout)
+- Running a server with a simple `mood` configuration
 
 ## Environment setup
 
