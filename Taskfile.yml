@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  test:
+    cmds:
+      - go test
+  build:
+    cmds:
+      - mkdir -p build
+      - GOOS=linux go build -o ./build/sample-lin
+      - GOOS=darwin go build -o ./build/sample-mac
+      - GOOS=windows go build -o ./build/sample-win.exe
